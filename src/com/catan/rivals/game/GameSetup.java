@@ -84,7 +84,6 @@ public class GameSetup {
      * @param playerIndex 0 or 1
      */
     private static void setupRegions(Player player, Deck deck, int playerIndex) {
-        Principality prin = player.getPrincipality();
         
         // Dice assignments for two players (from original game rules)
         // Player 0: Forest=2, Gold=1, Field=6, Hill=3, Pasture=4, Mountain=5

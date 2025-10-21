@@ -19,16 +19,28 @@ $cp = ".;gson.jar"
 
 Write-Host "Compiling source files..."
 javac -cp $cp -d bin `
-    src\com\catan\rivals\util\*.java `
+    src\com\catan\rivals\util\GameObserver.java `
+    src\com\catan\rivals\util\JsonUtils.java `
+    src\com\catan\rivals\util\CardFactory.java `
+    src\com\catan\rivals\util\PrincipalityRenderer.java `
     src\com\catan\rivals\model\*.java `
-    src\com\catan\rivals\player\*.java `
+    src\com\catan\rivals\player\Player.java `
+    src\com\catan\rivals\player\HumanPlayer.java `
+    src\com\catan\rivals\player\RemotePlayerProxy.java `
     src\com\catan\rivals\game\*.java `
+    src\com\catan\rivals\game\phase\*.java `
+    src\com\catan\rivals\game\event\*.java `
     src\com\catan\rivals\net\*.java
 
 if ($LASTEXITCODE -eq 0) {
     Write-Host "Compilation successful!"
-    Write-Host 'To run:'
-    Write-Host '  java -cp ".;gson.jar;bin" com.catan.rivals.game.GameEngine'
+    Write-Host ""
+    Write-Host "To run the game:"
+    Write-Host '  Local:  java -cp ".;gson.jar;bin" com.catan.rivals.game.GameEngine'
+    Write-Host '  Server: java -cp ".;gson.jar;bin" com.catan.rivals.net.GameServer'
+    Write-Host '  Client: java -cp ".;gson.jar;bin" com.catan.rivals.net.GameClient'
+    Write-Host ""
+    Write-Host "Note: AI player removed. To add AI in future, implement the Player abstract class."
 } else {
     Write-Host "Compilation failed with exit code $LASTEXITCODE"
     exit $LASTEXITCODE

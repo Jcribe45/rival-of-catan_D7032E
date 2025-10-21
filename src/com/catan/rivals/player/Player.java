@@ -1,13 +1,14 @@
 package com.catan.rivals.player;
 
 import com.catan.rivals.model.*;
+import com.catan.rivals.util.PrincipalityRenderer;
 import java.util.*;
 
 /**
  * Abstract base class for all player types.
  * 
  * Design Pattern: Template Method - defines player behavior skeleton
- * SOLID: Open-Closed - extensible for new player types
+ * SOLID: Open-Closed - extensible for new player types (including AI)
  * SOLID: Liskov Substitution - all subtypes can be used interchangeably
  */
 public abstract class Player {
@@ -70,7 +71,7 @@ public abstract class Player {
         boolean done = false;
         
         while (!done) {
-            displayBoard();
+            displayBothBoards(opponent);
             displayHand();
             String action = promptForAction();
             done = executeAction(action, opponent, deck);
@@ -78,12 +79,23 @@ public abstract class Player {
     }
     
     /**
+     * Displays both the player's and opponent's principalities.
+     * This provides full game state visibility.
+     * Uses centralized PrincipalityRenderer for consistent formatting.
+     * 
+     * @param opponent The opponent player
+     */
+    protected void displayBothBoards(Player opponent) {
+        sendMessage(PrincipalityRenderer.renderBothPrincipalities(this, opponent));
+    }
+    
+    /**
      * Displays the player's principality.
-     * Default implementation, can be overridden.
+     * Uses centralized PrincipalityRenderer.
      */
     protected void displayBoard() {
         sendMessage("\n=== Your Principality ===");
-        sendMessage(renderPrincipality());
+        sendMessage(PrincipalityRenderer.renderPrincipality(this));
     }
     
     /**
@@ -321,80 +333,6 @@ public abstract class Player {
             return hand.remove(index);
         }
         return null;
-    }
-    
-    // ========== Display Methods ==========
-    
-    /**
-     * Renders the principality as a string.
-     * 
-     * @return ASCII representation of the board
-     */
-    protected String renderPrincipality() {
-        StringBuilder sb = new StringBuilder();
-        int rows = principality.getRowCount();
-        int cols = principality.getColumnCount();
-        
-        // Column headers
-        sb.append("     ");
-        for (int c = 0; c < cols; c++) {
-            sb.append(String.format("%-12s ", "Col " + c));
-        }
-        sb.append("\n");
-        
-        // Separator
-        sb.append("   ");
-        for (int c = 0; c < cols; c++) {
-            sb.append("+------------");
-        }
-        sb.append("+\n");
-        
-        // Rows
-        for (int r = 0; r < rows; r++) {
-            sb.append(String.format("%2d |", r));
-            for (int c = 0; c < cols; c++) {
-                Card card = principality.getCardAt(r, c);
-                String cellContent = card == null ? "" : formatCard(card);
-                sb.append(String.format("%-12s|", cellContent));
-            }
-            sb.append("\n");
-            
-            // Separator
-            sb.append("   ");
-            for (int c = 0; c < cols; c++) {
-                sb.append("+------------");
-            }
-            sb.append("+\n");
-        }
-        
-        // Points summary
-        sb.append(String.format("\nVP=%d CP=%d SP=%d FP=%d PP=%d\n",
-            victoryPoints, commercePoints, skillPoints, strengthPoints, progressPoints));
-        
-        return sb.toString();
-    }
-    
-    /**
-     * Formats a card for display.
-     */
-    protected String formatCard(Card card) {
-        if (card == null) {
-            return "";
-        }
-        
-        String name = card.getName();
-        if (name.length() > 10) {
-            name = name.substring(0, 10);
-        }
-        
-        // Add resource info for regions
-        if (card.getCardType() == CardType.REGION) {
-            int stored = card.getStoredResources();
-            int dice = card.getDiceRoll();
-            return String.format("%s(%d:%d)", name, dice, stored);
-        }
-        
-        return name;
     }
     
     // ========== Getters and Setters ==========

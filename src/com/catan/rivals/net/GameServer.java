@@ -39,7 +39,7 @@ public class GameServer {
         System.out.println("Waiting for player connection...");
         
         // Add local player (server host)
-        HumanPlayer localPlayer = new HumanPlayer("Server Host");
+        HumanPlayer localPlayer = new HumanPlayer("Host");
         gameEngine.addPlayer(localPlayer);
         
         // Accept remote player connection
