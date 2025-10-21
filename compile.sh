@@ -50,7 +50,6 @@ if [ $? -eq 0 ]; then
         echo "  Server:             java -cp \".:gson.jar:bin\" com.catan.rivals.net.GameServer"
         echo "  Client:             java -cp \".:gson.jar:bin\" com.catan.rivals.net.GameClient"
         echo ""
-        echo "Note: AI player removed. To add AI in future, implement the Player abstract class."
 else
         echo "Compilation failed!"
         exit 1

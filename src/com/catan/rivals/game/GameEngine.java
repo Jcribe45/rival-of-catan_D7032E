@@ -10,13 +10,11 @@ import java.util.ArrayList;
 
 /**
  * Main game engine coordinating the game flow.
- * Uses Phase Handlers (Strategy Pattern) to delegate phase execution.
+ * FIXED: Proper turn order - Brigand Attack happens BEFORE production per official rules.
  * 
  * Design Pattern: Template Method + Strategy Pattern + Facade Pattern
  * SOLID: Single Responsibility - coordinates game flow, delegates phases
  * SOLID: Open-Closed - new phases can be added without modifying this class
- * 
- * This refactored version is much cleaner with phases extracted to handlers.
  */
 public class GameEngine {
     
@@ -91,6 +89,7 @@ public class GameEngine {
         }
         
         broadcast("=== RIVALS FOR CATAN - GAME START ===");
+        broadcast("Introductory Game: First to 7 Victory Points wins!");
         displayGameStateToAll();
         
         int currentPlayerIndex = 0;
@@ -99,7 +98,10 @@ public class GameEngine {
             Player active = players.get(currentPlayerIndex);
             Player opponent = players.get((currentPlayerIndex + 1) % 2);
             
-            broadcast("\n--- " + active + "'s Turn ---");
+            broadcast("\n" + "=".repeat(60));
+            broadcast("--- " + active + "'s Turn ---");
+            broadcast("=".repeat(60));
+            
             executeTurn(active, opponent);
             
             if (currentPhase == GamePhase.GAME_OVER) {
@@ -112,7 +114,14 @@ public class GameEngine {
     
     /**
      * Executes a complete turn using Template Method pattern.
-     * Delegates each phase to appropriate handler.
+     * FIXED: Proper turn order per official rules:
+     * 1. Roll both dice
+     * 2. If Brigand Attack: Event first, then Production
+     * 3. Otherwise: Production first, then Event
+     * 4. Action Phase
+     * 5. Replenish Hand
+     * 6. Exchange (optional)
+     * 7. Victory Check
      * 
      * @param active The active player
      * @param opponent The opponent
@@ -124,13 +133,15 @@ public class GameEngine {
         int production = rolls[0];
         int event = rolls[1];
         
-        broadcast("Production Die: " + production);
-        broadcast("Event Die: " + event + " (" + Dice.getEventDescription(event) + ")");
+        broadcast("\n[Dice Roll]");
+        broadcast("  Production Die: " + production);
+        broadcast("  Event Die: " + event + " (" + Dice.getEventDescription(event) + ")");
         notifyObservers("DICE_ROLLED", rolls);
         
         // Phase 2 & 3: Apply Production and Event
-        // (Order depends on event type - Brigand first, then production)
+        // CRITICAL FIX: Official Rules state Brigand Attack happens BEFORE production
         if (event == Dice.EVENT_BRIGAND) {
+            broadcast("\n** BRIGAND ATTACK FIRST **");
             executePhase(new EventPhaseHandler(event, players, deck));
             executePhase(new ProductionPhaseHandler(production, players));
         } else {
@@ -138,26 +149,36 @@ public class GameEngine {
             executePhase(new EventPhaseHandler(event, players, deck));
         }
         
-        // Show updated board state
+        // Show updated board state after production/events
+        broadcast("\n[Board State After Production & Events]");
         displayGameStateToAll();
         
         // Phase 4: Action Phase
         currentPhase = GamePhase.ACTION;
+        broadcast("\n[Action Phase]");
         active.takeActions(opponent, deck);
         
         // Phase 5: Replenish Hand
         currentPhase = GamePhase.REPLENISH;
+        broadcast("\n[Replenish Phase]");
         replenishHandler.execute(active, opponent);
         
         // Phase 6: Exchange (optional)
         currentPhase = GamePhase.EXCHANGE;
-        exchangeHandler.executeExchange(active);
+        broadcast("\n[Exchange Phase - Optional]");
+        if (exchangeHandler.canExchange(active)) {
+            exchangeHandler.executeExchange(active);
+        } else {
+            active.sendMessage("Cannot exchange cards (need cards and resources).");
+        }
         
         // Phase 7: Victory Check
         currentPhase = GamePhase.VICTORY_CHECK;
         if (victoryHandler.checkVictory(active, opponent)) {
             handleVictory(active, opponent);
         }
+        
+        broadcast("\n--- End of Turn ---\n");
     }
     
     /**
@@ -193,13 +214,13 @@ public class GameEngine {
     private void handleVictory(Player winner, Player loser) {
         int finalScore = victoryCondition.calculateTotalVictoryPoints(winner, loser);
         
-        broadcast("\n=================================");
-        broadcast("         GAME OVER!");
-        broadcast("=================================");
+        broadcast("\n" + "=".repeat(60));
+        broadcast("                    GAME OVER!");
+        broadcast("=".repeat(60));
         broadcast("Winner: " + winner);
         broadcast("Final Score: " + finalScore + " Victory Points");
-        broadcast(victoryCondition.getVictoryPointsSummary(winner, loser));
-        broadcast("=================================");
+        broadcast("\n" + victoryCondition.getVictoryPointsSummary(winner, loser));
+        broadcast("=".repeat(60));
         
         currentPhase = GamePhase.GAME_OVER;
         notifyObservers("GAME_WON", winner);

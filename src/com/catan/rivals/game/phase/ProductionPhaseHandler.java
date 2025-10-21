@@ -6,7 +6,8 @@ import java.util.List;
 
 /**
  * Handles the production phase of a turn.
- * Applies resource production based on dice roll.
+ * FIXED: Both players produce simultaneously when their regions match the die roll.
+ * Per official rules: All regions with the rolled number produce for BOTH players at the same time.
  * 
  * Design Pattern: Strategy Pattern (concrete strategy)
  * SOLID: Single Responsibility - only handles production
@@ -19,7 +20,7 @@ public class ProductionPhaseHandler implements PhaseHandler {
     /**
      * Constructor.
      * 
-     * @param productionDieRoll The production die result
+     * @param productionDieRoll The production die result (1-6)
      * @param allPlayers All players in the game
      */
     public ProductionPhaseHandler(int productionDieRoll, List<Player> allPlayers) {
@@ -29,9 +30,10 @@ public class ProductionPhaseHandler implements PhaseHandler {
     
     @Override
     public boolean execute(Player activePlayer, Player opponent) {
-        broadcast("[Production] Die face: " + productionDieRoll);
+        broadcast("[Production] Die rolled: " + productionDieRoll);
+        broadcast("All regions with number " + productionDieRoll + " produce resources.");
         
-        // Apply production to all players
+        // Apply production to ALL players simultaneously (per official rules)
         for (Player player : allPlayers) {
             applyProductionForPlayer(player);
         }
@@ -46,6 +48,8 @@ public class ProductionPhaseHandler implements PhaseHandler {
     
     /**
      * Applies production for a single player.
+     * Official Rules: Each region with the rolled number produces 1 resource.
+     * Booster buildings (mills, foundries, etc.) double this to 2 resources.
      * 
      * @param player The player
      */
@@ -53,9 +57,12 @@ public class ProductionPhaseHandler implements PhaseHandler {
         List<Principality.CardPosition> regions = 
             player.getPrincipality().findCardsByType(CardType.REGION);
         
+        int totalProduced = 0;
+        
         for (Principality.CardPosition pos : regions) {
             Card region = pos.card;
             
+            // Check if this region's number was rolled
             if (region.getDiceRoll() == productionDieRoll) {
                 // Base production: +1 resource
                 int production = 1;
@@ -65,16 +72,38 @@ public class ProductionPhaseHandler implements PhaseHandler {
                     production = 2;
                 }
                 
-                // Add resources (max 3 per region)
-                for (int i = 0; i < production; i++) {
-                    region.addResource();
+                // Add resources to the region (max 3 per region)
+                int added = 0;
+                for (int i = 0; i < production && region.hasStorageSpace(); i++) {
+                    if (region.addResource()) {
+                        added++;
+                    }
+                }
+                
+                if (added > 0) {
+                    totalProduced += added;
+                    player.sendMessage(String.format("  %s at (%d,%d) produced %d %s (now has %d/3)", 
+                        region.getName(), pos.row, pos.col, added,
+                        getResourceDisplayName(region), region.getStoredResources()));
                 }
             }
+        }
+        
+        if (totalProduced == 0) {
+            player.sendMessage("  No production this turn.");
+        } else {
+            player.sendMessage(String.format("  Total resources produced: %d", totalProduced));
         }
     }
     
     /**
      * Checks if a region has an adjacent booster building.
+     * Booster buildings double production:
+     * - Iron Foundry (ore from mountains)
+     * - Grain Mill (grain from fields)
+     * - Lumber Camp (lumber from forests)
+     * - Brick Factory (brick from hills)
+     * - Weaver's Shop (wool from pastures)
      * 
      * @param player The player
      * @param row Region row
@@ -87,11 +116,15 @@ public class ProductionPhaseHandler implements PhaseHandler {
             return false;
         }
         
-        // Check left and right for booster buildings
+        // Check adjacent positions (left and right in same row)
+        // Also check above and below for settlement-placed boosters
         Card left = player.getPrincipality().getCardAt(row, col - 1);
         Card right = player.getPrincipality().getCardAt(row, col + 1);
+        Card above = player.getPrincipality().getCardAt(row - 1, col);
+        Card below = player.getPrincipality().getCardAt(row + 1, col);
         
-        return isBoosting(left, region) || isBoosting(right, region);
+        return isBoosting(left, region) || isBoosting(right, region) ||
+               isBoosting(above, region) || isBoosting(below, region);
     }
     
     /**
@@ -109,6 +142,7 @@ public class ProductionPhaseHandler implements PhaseHandler {
         String bName = building.getName();
         String rName = region.getName();
         
+        // Check building-region matching per official rules
         if ("Iron Foundry".equalsIgnoreCase(bName) && "Mountain".equalsIgnoreCase(rName)) {
             return true;
         }
@@ -126,6 +160,17 @@ public class ProductionPhaseHandler implements PhaseHandler {
         }
         
         return false;
+    }
+    
+    /**
+     * Gets display name for a region's resource.
+     * 
+     * @param region The region
+     * @return Resource display name
+     */
+    private String getResourceDisplayName(Card region) {
+        ResourceType type = region.getProducedResource();
+        return type != null ? type.getDisplayName() : "resource";
     }
     
     /**

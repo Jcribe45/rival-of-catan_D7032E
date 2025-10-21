@@ -3,9 +3,12 @@ package com.catan.rivals.game;
 import com.catan.rivals.model.*;
 import com.catan.rivals.player.Player;
 import java.util.List;
+import java.util.Map;
+import java.util.EnumMap;
 
 /**
  * Handles initial game setup for players.
+ * FIXED: Corrected building costs per official Rivals for Catan rules.
  * 
  * SOLID: Single Responsibility - handles setup only
  * Booch: Completeness - all setup logic in one place
@@ -24,7 +27,7 @@ public class GameSetup {
             setupPlayerPrincipality(players.get(i), deck, i);
         }
         
-        // Initial card draw for each player
+        // Initial card draw for each player (3 cards from stacks 1-3)
         for (Player player : players) {
             drawInitialHand(player, deck);
         }
@@ -40,10 +43,13 @@ public class GameSetup {
     
     /**
      * Sets up a single player's starting principality.
-     * Layout (5x5 grid, center row = 2):
-     * Row 1: Region | Empty | Region | Empty | Region
-     * Row 2: Empty  | Settlement | Road | Settlement | Empty
-     * Row 3: Region | Empty | Region | Empty | Region
+     * Official Rules Layout:
+     * Row 1: Region(2) | Empty     | Region(1) | Empty     | Region(6)
+     * Row 2: Empty     | Settlement| Road      | Settlement| Empty
+     * Row 3: Region(3) | Empty     | Region(4) | Empty     | Region(5)
+     * 
+     * Player 0 dice: Forest=2, Gold=1, Field=6, Hill=3, Pasture=4, Mountain=5
+     * Player 1 dice: Forest=3, Gold=4, Field=5, Hill=2, Pasture=1, Mountain=6
      * 
      * @param player The player
      * @param deck The deck
@@ -53,10 +59,10 @@ public class GameSetup {
         Principality prin = player.getPrincipality();
         int centerRow = 2;
         
-        // Place center cards (settlements and road)
-        Card settlement1 = deck.removeCardByName(deck.getSettlements(), "Settlement");
-        Card road = deck.removeCardByName(deck.getRoads(), "Road");
-        Card settlement2 = deck.removeCardByName(deck.getSettlements(), "Settlement");
+        // Place center cards (settlements and road) - FIXED COSTS
+        Card settlement1 = createSettlement();
+        Card road = createRoad();
+        Card settlement2 = createSettlement();
         
         if (settlement1 != null) {
             prin.placeCard(centerRow, 1, settlement1);
@@ -72,12 +78,52 @@ public class GameSetup {
             player.addVictoryPoints(1); // Settlement = 1 VP
         }
         
-        // Place regions with asymmetric dice assignments
+        // Place regions with asymmetric dice assignments per official rules
         setupRegions(player, deck, playerIndex);
     }
     
     /**
+     * Creates a Settlement card with correct cost.
+     * Official Cost: 1 Brick, 1 Grain, 1 Lumber, 1 Wool
+     */
+    private static Card createSettlement() {
+        Card settlement = new Card("Settlement");
+        settlement.setCardType(CardType.CENTER_CARD);
+        settlement.setVictoryPoints(1);
+        settlement.setPlacement("Settlement/city");
+        
+        Map<ResourceType, Integer> cost = new EnumMap<>(ResourceType.class);
+        cost.put(ResourceType.BRICK, 1);
+        cost.put(ResourceType.GRAIN, 1);
+        cost.put(ResourceType.LUMBER, 1);
+        cost.put(ResourceType.WOOL, 1);
+        settlement.setCost(cost);
+        
+        return settlement;
+    }
+    
+    /**
+     * Creates a Road card with correct cost.
+     * Official Cost: 2 Brick, 1 Lumber
+     */
+    private static Card createRoad() {
+        Card road = new Card("Road");
+        road.setCardType(CardType.CENTER_CARD);
+        road.setPlacement("Road");
+        
+        Map<ResourceType, Integer> cost = new EnumMap<>(ResourceType.class);
+        cost.put(ResourceType.BRICK, 2);
+        cost.put(ResourceType.LUMBER, 1);
+        road.setCost(cost);
+        
+        return road;
+    }
+    
+    /**
      * Sets up regions for a player with specific dice assignments.
+     * Per official rules:
+     * - Player 0: Forest=2, Gold=1, Field=6, Hill=3, Pasture=4, Mountain=5
+     * - Player 1: Forest=3, Gold=4, Field=5, Hill=2, Pasture=1, Mountain=6
      * 
      * @param player The player
      * @param deck The deck
@@ -85,9 +131,7 @@ public class GameSetup {
      */
     private static void setupRegions(Player player, Deck deck, int playerIndex) {
         
-        // Dice assignments for two players (from original game rules)
-        // Player 0: Forest=2, Gold=1, Field=6, Hill=3, Pasture=4, Mountain=5
-        // Player 1: Forest=3, Gold=4, Field=5, Hill=2, Pasture=1, Mountain=6
+        // Dice assignments for two players (from official game rules)
         int[][] diceAssignments = {
             {2, 1, 6, 3, 4, 5},  // Player 0
             {3, 4, 5, 2, 1, 6}   // Player 1
@@ -95,9 +139,11 @@ public class GameSetup {
         
         int[] dice = diceAssignments[playerIndex % 2];
         
-        // Place regions in specific positions
+        // Place regions in specific positions per official layout
+        // Row 1: Forest, Gold Field, Field
+        // Row 3: Hill, Pasture, Mountain
         placeRegion(player, deck, "Forest", 1, 0, dice[0], 1);
-        placeRegion(player, deck, "Gold Field", 1, 2, dice[1], 0);
+        placeRegion(player, deck, "Gold Field", 1, 2, dice[1], 0); // Gold starts with 0
         placeRegion(player, deck, "Field", 1, 4, dice[2], 1);
         placeRegion(player, deck, "Hill", 3, 0, dice[3], 1);
         placeRegion(player, deck, "Pasture", 3, 2, dice[4], 1);
@@ -112,7 +158,7 @@ public class GameSetup {
      * @param regionName The region name
      * @param row The row
      * @param col The column
-     * @param diceValue The production die value
+     * @param diceValue The production die value (1-6)
      * @param initialResources Initial stored resources
      */
     private static void placeRegion(Player player, Deck deck, String regionName, 
@@ -120,6 +166,7 @@ public class GameSetup {
         Card region = deck.removeCardByName(deck.getRegions(), regionName);
         
         if (region != null) {
+            region.setCardType(CardType.REGION);
             region.setDiceRoll(diceValue);
             region.setStoredResources(initialResources);
             player.getPrincipality().placeCard(row, col, region);
@@ -127,14 +174,15 @@ public class GameSetup {
     }
     
     /**
-     * Draws initial hand for a player (3 cards).
+     * Draws initial hand for a player (3 cards from stacks 1-3).
+     * Official Rules: Each player draws 1 card from stack 1, 1 from stack 2, 1 from stack 3.
      * 
      * @param player The player
      * @param deck The deck
      */
     private static void drawInitialHand(Player player, Deck deck) {
-        for (int i = 1; i <= 3; i++) {
-            Card card = deck.drawFromStack(i);
+        for (int stackNum = 1; stackNum <= 3; stackNum++) {
+            Card card = deck.drawFromStack(stackNum);
             if (card != null) {
                 player.addCardToHand(card);
             }
@@ -143,17 +191,17 @@ public class GameSetup {
     
     /**
      * Assigns dice values to remaining regions in the deck.
-     * Each region type has specific dice distributions.
+     * Official Rules specify which dice values go on which regions.
+     * 
+     * Remaining regions get these dice values:
+     * - 2 Fields: 3, 1
+     * - 2 Mountains: 4, 2
+     * - 2 Hills: 5, 1
+     * - 2 Forests: 6, 4
+     * - 2 Pastures: 6, 5
+     * - 2 Gold Fields: 3, 2
      */
     private static void assignRemainingRegionDice(Deck deck) {
-        // Remaining regions get these dice values:
-        // 2 Fields: 3, 1
-        // 2 Mountains: 4, 2
-        // 2 Hills: 5, 1
-        // 2 Forests: 6, 4
-        // 2 Pastures: 6, 5
-        // 2 Gold Fields: 3, 2
-        
         assignDiceToRegionType(deck.getRegions(), "Field", 3, 1);
         assignDiceToRegionType(deck.getRegions(), "Mountain", 4, 2);
         assignDiceToRegionType(deck.getRegions(), "Hill", 5, 1);
@@ -185,5 +233,39 @@ public class GameSetup {
                 }
             }
         }
+    }
+    
+    /**
+     * Gets the correct cost for a center card type.
+     * 
+     * @param type The card type ("Road", "Settlement", "City")
+     * @return Cost map
+     */
+    public static Map<ResourceType, Integer> getCenterCardCost(String type) {
+        Map<ResourceType, Integer> cost = new EnumMap<>(ResourceType.class);
+        
+        switch (type.toUpperCase()) {
+            case "ROAD":
+                // Official: 2 Brick, 1 Lumber
+                cost.put(ResourceType.BRICK, 2);
+                cost.put(ResourceType.LUMBER, 1);
+                break;
+                
+            case "SETTLEMENT":
+                // Official: 1 Brick, 1 Grain, 1 Lumber, 1 Wool
+                cost.put(ResourceType.BRICK, 1);
+                cost.put(ResourceType.GRAIN, 1);
+                cost.put(ResourceType.LUMBER, 1);
+                cost.put(ResourceType.WOOL, 1);
+                break;
+                
+            case "CITY":
+                // Official: 3 Grain, 2 Ore
+                cost.put(ResourceType.GRAIN, 3);
+                cost.put(ResourceType.ORE, 2);
+                break;
+        }
+        
+        return cost;
     }
 }

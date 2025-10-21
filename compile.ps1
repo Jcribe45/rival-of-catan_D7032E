@@ -40,7 +40,6 @@ if ($LASTEXITCODE -eq 0) {
     Write-Host '  Server: java -cp ".;gson.jar;bin" com.catan.rivals.net.GameServer'
     Write-Host '  Client: java -cp ".;gson.jar;bin" com.catan.rivals.net.GameClient'
     Write-Host ""
-    Write-Host "Note: AI player removed. To add AI in future, implement the Player abstract class."
 } else {
     Write-Host "Compilation failed with exit code $LASTEXITCODE"
     exit $LASTEXITCODE

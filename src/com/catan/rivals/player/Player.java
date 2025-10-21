@@ -1,11 +1,13 @@
 package com.catan.rivals.player;
 
 import com.catan.rivals.model.*;
+import com.catan.rivals.game.GameSetup;
 import com.catan.rivals.util.PrincipalityRenderer;
 import java.util.*;
 
 /**
  * Abstract base class for all player types.
+ * FIXED: Proper building costs and validation per official rules.
  * 
  * Design Pattern: Template Method - defines player behavior skeleton
  * SOLID: Open-Closed - extensible for new player types (including AI)
@@ -73,6 +75,7 @@ public abstract class Player {
         while (!done) {
             displayBothBoards(opponent);
             displayHand();
+            displayResources();
             String action = promptForAction();
             done = executeAction(action, opponent, deck);
         }
@@ -103,13 +106,27 @@ public abstract class Player {
      * Default implementation, can be overridden.
      */
     protected void displayHand() {
-        sendMessage("\n=== Your Hand ===");
+        sendMessage("\n=== Your Hand (" + hand.size() + " cards) ===");
         for (int i = 0; i < hand.size(); i++) {
             Card card = hand.get(i);
-            sendMessage(String.format("[%d] %s (Cost: %s)", 
-                i, card.getName(), card.getCostString()));
+            sendMessage(String.format("[%d] %s (Cost: %s, Type: %s)", 
+                i, card.getName(), card.getCostString(), card.getCardType()));
         }
         sendMessage("");
+    }
+    
+    /**
+     * Displays player's available resources.
+     */
+    protected void displayResources() {
+        sendMessage("\n=== Your Resources ===");
+        Map<ResourceType, Integer> resources = resourceBank.getResourceSummary();
+        for (Map.Entry<ResourceType, Integer> entry : resources.entrySet()) {
+            if (entry.getValue() > 0) {
+                sendMessage(String.format("  %s: %d", entry.getKey().getDisplayName(), entry.getValue()));
+            }
+        }
+        sendMessage(String.format("Total: %d resources\n", resourceBank.getTotalResources()));
     }
     
     /**
@@ -121,8 +138,9 @@ public abstract class Player {
     protected String promptForAction() {
         sendMessage("Choose action:");
         sendMessage("  PLAY <index> <row> <col> - Play card from hand");
-        sendMessage("  BUILD <type> <row> <col> - Build Road/Settlement/City");
+        sendMessage("  BUILD <Road|Settlement|City> <row> <col> - Build center card");
         sendMessage("  TRADE3 <give> <get> - Trade 3:1 with bank");
+        sendMessage("  VIEW - View boards again");
         sendMessage("  END - End action phase");
         sendMessage("\nYour choice: ");
         return receiveInput();
@@ -147,6 +165,10 @@ public abstract class Player {
         switch (command) {
             case "END":
                 return true;
+                
+            case "VIEW":
+                displayBothBoards(opponent);
+                return false;
                 
             case "PLAY":
                 if (parts.length >= 4) {
@@ -180,6 +202,7 @@ public abstract class Player {
     
     /**
      * Handles playing a card from hand.
+     * FIXED: Improved validation and error messages.
      */
     protected boolean handlePlayCard(String[] parts, Player opponent) {
         try {
@@ -188,27 +211,43 @@ public abstract class Player {
             int col = Integer.parseInt(parts[3]);
             
             if (index < 0 || index >= hand.size()) {
-                sendMessage("Invalid card index");
+                sendMessage("Invalid card index (0-" + (hand.size()-1) + ")");
                 return false;
             }
             
             Card card = hand.get(index);
             
+            // Check if can afford
             if (!resourceBank.canAfford(card.getCost())) {
                 sendMessage("Cannot afford card cost: " + card.getCostString());
+                sendMessage("You need: " + card.getCostString());
                 return false;
             }
             
+            // Check if can place at that position
             if (!card.canApplyEffect(this, opponent, row, col)) {
-                sendMessage("Cannot play card at that position");
+                sendMessage("Cannot play card at position (" + row + "," + col + ")");
+                sendMessage("Reasons might include:");
+                sendMessage("  - Position is not empty");
+                sendMessage("  - Card type cannot be placed there");
+                sendMessage("  - Prerequisites not met");
                 return false;
             }
             
+            // Pay cost
             if (resourceBank.payCost(card.getCost())) {
+                // Apply effect
                 if (card.applyEffect(this, opponent, row, col)) {
                     hand.remove(index);
-                    sendMessage("Successfully played " + card.getName());
+                    sendMessage("✓ Successfully played " + card.getName());
                     return false;
+                }
+                else {
+                    sendMessage("✗ Failed to apply card effect");
+                    // Refund resources (add them back)
+                    for (Map.Entry<ResourceType, Integer> entry : card.getCost().entrySet()) {
+                        resourceBank.addResources(entry.getKey(), entry.getValue());
+                    }
                 }
             }
             
@@ -223,6 +262,7 @@ public abstract class Player {
     
     /**
      * Handles building a center card (Road/Settlement/City).
+     * FIXED: Uses correct costs from GameSetup.getCenterCardCost().
      */
     protected boolean handleBuild(String[] parts, Deck deck) {
         String type = parts[1].toUpperCase();
@@ -231,6 +271,29 @@ public abstract class Player {
             int row = Integer.parseInt(parts[2]);
             int col = Integer.parseInt(parts[3]);
             
+            // Validate type
+            if (!type.equals("ROAD") && !type.equals("SETTLEMENT") && !type.equals("CITY")) {
+                sendMessage("Invalid build type. Use: Road, Settlement, or City");
+                return false;
+            }
+            
+            // Get correct cost from GameSetup (FIXED)
+            Map<ResourceType, Integer> cost = GameSetup.getCenterCardCost(type);
+            
+            if (cost.isEmpty()) {
+                sendMessage("Invalid build type");
+                return false;
+            }
+            
+            // Check if can afford
+            if (!resourceBank.canAfford(cost)) {
+                sendMessage("Cannot afford " + type);
+                sendMessage("Cost: " + formatCost(cost));
+                sendMessage("You have: " + formatResources(resourceBank.getResourceSummary()));
+                return false;
+            }
+            
+            // Get card from deck
             Card cardToBuild = null;
             List<Card> sourceList = null;
             
@@ -244,34 +307,48 @@ public abstract class Player {
                 case "CITY":
                     sourceList = deck.getCities();
                     break;
-                default:
-                    sendMessage("Invalid build type. Use: Road, Settlement, or City");
-                    return false;
             }
             
-            if (sourceList.isEmpty()) {
-                sendMessage("No " + type + " cards available");
+            if (sourceList == null || sourceList.isEmpty()) {
+                sendMessage("No " + type + " cards available in deck");
                 return false;
             }
             
             cardToBuild = sourceList.get(0);
+            cardToBuild.setCost(cost); // Ensure cost is set
             
-            if (!resourceBank.canAfford(cardToBuild.getCost())) {
-                sendMessage("Cannot afford: " + cardToBuild.getCostString());
+            // Check placement rules
+            if (!principality.isEmptyAt(row, col)) {
+                sendMessage("Position (" + row + "," + col + ") is not empty");
                 return false;
             }
             
-            if (!cardToBuild.canApplyEffect(this, null, row, col)) {
-                sendMessage("Cannot build at that position");
-                return false;
-            }
-            
-            if (resourceBank.payCost(cardToBuild.getCost())) {
-                sourceList.remove(0); // Remove from deck
-                if (cardToBuild.applyEffect(this, null, row, col)) {
-                    sendMessage("Successfully built " + type);
+            // Additional validation for specific types
+            if (type.equals("CITY")) {
+                // City must upgrade a settlement
+                Card existing = principality.getCardAt(row, col);
+                if (existing == null || !existing.getName().equalsIgnoreCase("Settlement")) {
+                    sendMessage("City must be built on a Settlement");
                     return false;
                 }
+            }
+            
+            // Pay cost
+            if (resourceBank.payCost(cost)) {
+                sourceList.remove(0); // Remove from deck
+                
+                // Place card
+                principality.placeCard(row, col, cardToBuild);
+                
+                // Add victory points
+                if (type.equals("SETTLEMENT")) {
+                    addVictoryPoints(1);
+                } else if (type.equals("CITY")) {
+                    addVictoryPoints(1); // +1 more (settlement already gave 1)
+                }
+                
+                sendMessage("✓ Successfully built " + type + " at (" + row + "," + col + ")");
+                return false;
             }
             
         } catch (NumberFormatException e) {
@@ -283,6 +360,7 @@ public abstract class Player {
     
     /**
      * Handles 3:1 trade with bank.
+     * Per official rules: Trade 3 of one resource for 1 of any other.
      */
     protected boolean handleTrade3(String[] parts) {
         String give = parts[1];
@@ -293,20 +371,59 @@ public abstract class Player {
         
         if (giveType == null || getType == null) {
             sendMessage("Invalid resource types");
+            sendMessage("Valid types: Brick, Grain, Lumber, Wool, Ore, Gold");
             return false;
         }
         
-        if (resourceBank.getResourceCount(giveType) < 3) {
-            sendMessage("Not enough " + give + " to trade");
+        if (giveType == getType) {
+            sendMessage("Cannot trade for the same resource type");
             return false;
         }
         
+        int available = resourceBank.getResourceCount(giveType);
+        if (available < 3) {
+            sendMessage("Not enough " + giveType.getDisplayName() + " to trade (need 3, have " + available + ")");
+            return false;
+        }
+        
+        // Perform trade
         if (resourceBank.removeResources(giveType, 3)) {
             resourceBank.addResources(getType, 1);
-            sendMessage("Traded 3 " + give + " for 1 " + get);
+            sendMessage("✓ Traded 3 " + giveType.getDisplayName() + " for 1 " + getType.getDisplayName());
+        } else {
+            sendMessage("✗ Trade failed");
         }
         
         return false;
+    }
+    
+    /**
+     * Formats a cost map as a string.
+     */
+    private String formatCost(Map<ResourceType, Integer> cost) {
+        if (cost.isEmpty()) {
+            return "Free";
+        }
+        StringBuilder sb = new StringBuilder();
+        for (Map.Entry<ResourceType, Integer> entry : cost.entrySet()) {
+            if (sb.length() > 0) sb.append(", ");
+            sb.append(entry.getValue()).append(" ").append(entry.getKey().getDisplayName());
+        }
+        return sb.toString();
+    }
+    
+    /**
+     * Formats resources as a string.
+     */
+    private String formatResources(Map<ResourceType, Integer> resources) {
+        StringBuilder sb = new StringBuilder();
+        for (Map.Entry<ResourceType, Integer> entry : resources.entrySet()) {
+            if (entry.getValue() > 0) {
+                if (sb.length() > 0) sb.append(", ");
+                sb.append(entry.getValue()).append(" ").append(entry.getKey().getDisplayName());
+            }
+        }
+        return sb.length() > 0 ? sb.toString() : "None";
     }
     
     // ========== Card Management ==========
