@@ -1,0 +1,35 @@
+#!/usr/bin/env pwsh
+# compile.ps1 - PowerShell script to compile Rivals for Catan on Windows
+Write-Host "=== Compiling Rivals for Catan (Windows) ==="
+
+# Ensure bin exists
+if (-not (Test-Path bin)) {
+    New-Item -ItemType Directory -Path bin | Out-Null
+}
+
+# Ensure gson.jar exists (download from Maven central if missing)
+$gson = Join-Path -Path (Get-Location) -ChildPath "gson.jar"
+if (-not (Test-Path $gson)) {
+    Write-Host "gson.jar not found. Downloading gson-2.10.1 from Maven Central..."
+    Invoke-WebRequest -Uri "https://repo1.maven.org/maven2/com/google/code/gson/gson/2.10.1/gson-2.10.1.jar" -OutFile $gson
+}
+
+# Compile command using Windows classpath separator ';'
+$cp = ".;gson.jar"
+
+Write-Host "Compiling source files..."
+javac -cp $cp -d bin `
+    src\com\catan\rivals\util\*.java `
+    src\com\catan\rivals\model\*.java `
+    src\com\catan\rivals\player\*.java `
+    src\com\catan\rivals\game\*.java `
+    src\com\catan\rivals\net\*.java
+
+if ($LASTEXITCODE -eq 0) {
+    Write-Host "Compilation successful!"
+    Write-Host 'To run:'
+    Write-Host '  java -cp ".;gson.jar;bin" com.catan.rivals.game.GameEngine'
+} else {
+    Write-Host "Compilation failed with exit code $LASTEXITCODE"
+    exit $LASTEXITCODE
+}
