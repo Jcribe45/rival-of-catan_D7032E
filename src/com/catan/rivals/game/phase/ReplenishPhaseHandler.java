@@ -6,18 +6,12 @@ import com.catan.rivals.player.Player;
 /**
  * Handles the replenish phase where players draw cards to reach hand limit.
  * 
- * Design Pattern: Strategy Pattern (concrete strategy)
- * SOLID: Single Responsibility - only handles hand replenishment
+ * REFACTORED: Uses Player.chooseDrawStack() for consistency.
  */
 public class ReplenishPhaseHandler implements PhaseHandler {
     
     private Deck deck;
     
-    /**
-     * Constructor.
-     * 
-     * @param deck The game deck
-     */
     public ReplenishPhaseHandler(Deck deck) {
         this.deck = deck;
     }
@@ -27,39 +21,45 @@ public class ReplenishPhaseHandler implements PhaseHandler {
         int handLimit = 3 + activePlayer.getProgressPoints();
         
         while (activePlayer.getHand().size() < handLimit) {
-            activePlayer.sendMessage("Draw from stack (1-4):");
-            String input = activePlayer.receiveInput();
+            int stackNum = activePlayer.chooseDrawStack(deck, "Draw from stack", false);
             
-            try {
-                int stackNum = Integer.parseInt(input.trim());
-                Card card = deck.drawFromStack(stackNum);
-                
-                if (card != null) {
-                    activePlayer.addCardToHand(card);
-                    activePlayer.sendMessage("Drew: " + card.getName());
-                } else {
-                    activePlayer.sendMessage("Stack empty, trying next...");
-                    // Try other stacks
-                    for (int i = 1; i <= 4; i++) {
-                        card = deck.drawFromStack(i);
-                        if (card != null) {
-                            activePlayer.addCardToHand(card);
-                            activePlayer.sendMessage("Drew: " + card.getName());
-                            break;
-                        }
-                    }
+            if (stackNum < 0) {
+                // Try to find a non-empty stack automatically
+                stackNum = findNonEmptyStack();
+                if (stackNum < 0) {
+                    activePlayer.sendMessage("All stacks empty!");
+                    break;
                 }
-            } catch (NumberFormatException e) {
-                activePlayer.sendMessage("Invalid input");
+            }
+            
+            Card card = deck.drawFromStack(stackNum);
+            if (card != null) {
+                activePlayer.addCardToHand(card);
+                activePlayer.sendMessage("Drew: " + card.getName());
             }
         }
         
-        activePlayer.sendMessage("Hand replenished to " + activePlayer.getHand().size() + " cards.");
+        activePlayer.sendMessage("Hand replenished to " + 
+                                activePlayer.getHand().size() + " cards.");
         return true;
     }
     
     @Override
     public String getPhaseName() {
         return "Replenish";
+    }
+    
+    /**
+     * Finds the first non-empty draw stack.
+     * 
+     * @return Stack number (1-4), or -1 if all empty
+     */
+    private int findNonEmptyStack() {
+        for (int i = 1; i <= 4; i++) {
+            if (!deck.isStackEmpty(i)) {
+                return i;
+            }
+        }
+        return -1;
     }
 }

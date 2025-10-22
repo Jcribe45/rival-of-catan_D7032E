@@ -74,9 +74,12 @@ public class ProductionPhaseHandler implements PhaseHandler {
                 
                 // Add resources to the region (max 3 per region)
                 int added = 0;
-                for (int i = 0; i < production && region.hasStorageSpace(); i++) {
+                for (int i = 0; i < production; i++) {
                     if (region.addResource()) {
                         added++;
+                    } else {
+                        // Region is full (3/3), stop adding
+                        break;
                     }
                 }
                 

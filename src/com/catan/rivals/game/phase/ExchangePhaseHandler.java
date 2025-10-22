@@ -2,18 +2,27 @@ package com.catan.rivals.game.phase;
 
 import com.catan.rivals.model.*;
 import com.catan.rivals.player.Player;
+import com.catan.rivals.util.ResourceTransactionHelper;
 import java.util.List;
 
 /**
  * Handles the exchange phase of a turn.
  * Players can exchange cards from hand with draw stacks.
  * 
- * Design Pattern: Strategy Pattern - one strategy for exchange phase
- * SOLID: Single Responsibility - handles only exchange logic
+ * REFACTORED: Delegates to Player for UI, Deck for card management,
+ * and ResourceTransactionHelper for payments.
+ * 
+ * Design Pattern: Strategy Pattern + Facade Pattern
+ * SOLID: Single Responsibility - orchestrates exchange flow only
  */
 public class ExchangePhaseHandler {
     
     private Deck deck;
+    
+    // Exchange costs
+    private static final int FREE_EXCHANGE_COST = 0;
+    private static final int PAID_EXCHANGE_COST = 2;
+    private static final int PARISH_HALL_COST = 1;
     
     /**
      * Constructor.
@@ -27,11 +36,6 @@ public class ExchangePhaseHandler {
     /**
      * Executes the exchange phase for a player.
      * 
-     * Rules:
-     * - Player can exchange up to 2 cards per turn
-     * - Each exchange costs 1 resource per card
-     * - Player chooses card to discard and which stack to draw from
-     * 
      * @param player The player exchanging cards
      */
     public void executeExchange(Player player) {
@@ -39,7 +43,7 @@ public class ExchangePhaseHandler {
         int exchangesMade = 0;
         
         while (exchangesMade < maxExchanges) {
-            player.sendMessage("\n=== Exchange Phase ===");
+            player.sendMessage("=== Exchange Phase ===");
             player.sendMessage("Exchanges available: " + (maxExchanges - exchangesMade));
             player.sendMessage("Exchange a card? (Y/N)");
             
@@ -70,95 +74,62 @@ public class ExchangePhaseHandler {
      * @return True if exchange was successful
      */
     private boolean performExchange(Player player) {
-        List<Card> hand = player.getHand();
-        
-        if (hand.isEmpty()) {
+        if (player.getHand().isEmpty()) {
             player.sendMessage("No cards to exchange!");
             return false;
         }
         
-        // Check if player has resources to pay for exchange
-        boolean hasFreeExchange = player.getFlags().contains("TOWN_HALL");
-        boolean hasParishHall = player.getFlags().contains("PARISH_HALL");
+        // Step 1: Choose exchange type
+        int cost = getExchangeCost(player);
+        boolean canChoose = (cost > 0 || player.getFlags().contains("TOWN_HALL"));
         
-        if (!hasFreeExchange && !hasParishHall) {
-            // Standard exchange: costs 1 resource
-            if (player.getResourceBank().getTotalResources() < 1) {
-                player.sendMessage("Not enough resources to exchange (need 1 resource)");
-                return false;
-            }
+        if (cost < 0) {
+            return false; // Cancelled
         }
         
-        // Show hand
-        player.sendMessage("\n=== Your Hand ===");
-        for (int i = 0; i < hand.size(); i++) {
-            player.sendMessage(String.format("[%d] %s", i, hand.get(i).getName()));
-        }
-        
-        // Choose card to discard
-        player.sendMessage("\nChoose card to exchange (0-" + (hand.size() - 1) + ") or 'C' to cancel:");
-        String input = player.receiveInput();
-        
-        if (input.trim().toUpperCase().equals("C")) {
+        // Step 2: Choose card from hand
+        int cardIndex = player.chooseCardFromHand("Choose card to exchange", true);
+        if (cardIndex < 0) {
             return false;
         }
         
-        int cardIndex;
-        try {
-            cardIndex = Integer.parseInt(input.trim());
-            if (cardIndex < 0 || cardIndex >= hand.size()) {
-                player.sendMessage("Invalid card index!");
-                return false;
-            }
-        } catch (NumberFormatException e) {
-            player.sendMessage("Invalid input!");
+        // Step 3: Choose draw stack
+        int stackNum = player.chooseDrawStack(deck, "Choose draw stack", true);
+        if (stackNum < 0) {
             return false;
         }
         
-        // Choose draw stack
-        player.sendMessage("\nChoose draw stack (1-4):");
-        String stackInput = player.receiveInput();
-        
-        int stackNum;
-        try {
-            stackNum = Integer.parseInt(stackInput.trim());
-            if (stackNum < 1 || stackNum > 4) {
-                player.sendMessage("Invalid stack number!");
-                return false;
+        // Step 4: Pay cost
+        ResourceType paidType = null;
+        if (cost > 0) {
+            paidType = ResourceTransactionHelper.payResourceCost(player, cost, "Exchange");
+            if (paidType == null) {
+                return false; // Cannot afford
             }
-        } catch (NumberFormatException e) {
-            player.sendMessage("Invalid input!");
-            return false;
         }
         
-        // Check if stack is empty
-        Card newCard = deck.drawFromStack(stackNum);
+        // Step 5: Draw new card
+        Card newCard;
+        if (canChoose) {
+            List<Card> stack = deck.getDrawStack(stackNum);
+            newCard = player.chooseCardFromStack(stack, "Choose card from stack", true);
+        } else {
+            newCard = deck.drawFromStack(stackNum);
+        }
+        
         if (newCard == null) {
-            player.sendMessage("Stack " + stackNum + " is empty!");
+            player.sendMessage("Failed to draw card!");
+            if (paidType != null && cost > 0) {
+                ResourceTransactionHelper.refundResources(player, paidType, cost);
+            }
             return false;
         }
         
-        // Pay cost if required
-        if (!hasFreeExchange) {
-            if (hasParishHall) {
-                // Parish Hall: reduced cost
-                if (!payExchangeCost(player, 1)) {
-                    // Return card if can't pay
-                    returnCardToStack(newCard, stackNum);
-                    return false;
-                }
-            } else {
-                // Standard: choose any resource
-                if (!payExchangeCost(player, 1)) {
-                    returnCardToStack(newCard, stackNum);
-                    return false;
-                }
-            }
-        }
-        
-        // Perform exchange
+        // Step 6: Complete exchange
+        List<Card> hand = player.getHand();
         Card discarded = hand.remove(cardIndex);
         hand.add(newCard);
+        deck.returnCardToStackBottom(discarded, stackNum);
         
         player.sendMessage("Exchanged: " + discarded.getName() + " → " + newCard.getName());
         
@@ -166,65 +137,46 @@ public class ExchangePhaseHandler {
     }
     
     /**
-     * Pays the cost for an exchange.
-     * 
-     * @param player The player paying
-     * @param cost The cost in resources
-     * @return True if paid successfully
-     */
-    private boolean payExchangeCost(Player player, int cost) {
-        if (cost <= 0) {
-            return true;
-        }
-        
-        player.sendMessage("Exchange cost: " + cost + " resource");
-        player.sendMessage("Choose resource to pay (Brick/Grain/Lumber/Wool/Ore/Gold):");
-        String resourceInput = player.receiveInput();
-        
-        ResourceType type = ResourceType.fromString(resourceInput);
-        if (type == null) {
-            player.sendMessage("Invalid resource type!");
-            return false;
-        }
-        
-        if (player.getResourceBank().getResourceCount(type) < cost) {
-            player.sendMessage("Not enough " + type.getDisplayName() + "!");
-            return false;
-        }
-        
-        return player.getResourceBank().removeResources(type, cost);
-    }
-    
-    /**
-     * Returns a card to a draw stack (if exchange fails).
-     * 
-     * @param card The card to return
-     * @param stackNum The stack number
-     */
-    private void returnCardToStack(Card card, int stackNum) {
-        List<Card> stack = deck.getDrawStack(stackNum);
-        if (stack != null) {
-            stack.add(0, card); // Return to top
-        }
-    }
-    
-    /**
-     * Checks if player can perform exchanges.
+     * Determines exchange cost based on player's choice and buildings.
      * 
      * @param player The player
-     * @return True if exchanges are possible
+     * @return Cost (0 for free, >0 for paid), or -1 if cancelled
      */
-    public boolean canExchange(Player player) {
-        // Need cards in hand
-        if (player.getHand().isEmpty()) {
-            return false;
+    private int getExchangeCost(Player player) {
+        boolean hasTownHall = player.getFlags().contains("TOWN_HALL");
+        boolean hasParishHall = player.getFlags().contains("PARISH_HALL");
+        
+        // Town Hall: Paid exchange is free
+        if (hasTownHall) {
+            player.sendMessage("Town Hall: You can view and choose from entire stack for free!");
+            return FREE_EXCHANGE_COST;
         }
         
-        // Need resources unless has free exchange
-        if (player.getFlags().contains("TOWN_HALL")) {
-            return true; // Free exchanges
+        int paidCost = hasParishHall ? PARISH_HALL_COST : PAID_EXCHANGE_COST;
+        
+        player.sendMessage("Exchange Options:");
+        player.sendMessage("1. FREE: Draw random card from top of stack");
+        player.sendMessage("2. PAID (" + paidCost + " resource" + (paidCost > 1 ? "s" : "") + 
+                          "): View entire stack and choose any card");
+        player.sendMessage("Choose option (1/2) or 'C' to cancel:");
+        
+        String input = player.receiveInput();
+        
+        if (input.trim().toUpperCase().equals("C")) {
+            return -1;
         }
         
-        return player.getResourceBank().getTotalResources() >= 1;
+        if (input.trim().equals("1")) {
+            return FREE_EXCHANGE_COST;
+        } else if (input.trim().equals("2")) {
+            if (player.getResourceBank().getTotalResources() < paidCost) {
+                player.sendMessage("Not enough resources! (Need " + paidCost + ")");
+                return -1;
+            }
+            return paidCost;
+        } else {
+            player.sendMessage("Invalid option!");
+            return -1;
+        }
     }
 }

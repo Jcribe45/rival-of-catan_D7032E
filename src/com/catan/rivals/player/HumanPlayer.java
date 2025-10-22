@@ -34,6 +34,7 @@ public class HumanPlayer extends Player {
     
     @Override
     public void sendMessage(String message) {
+        // Add player name prefix for consistency
         System.out.println("[" + playerName + "] " + message);
     }
     
@@ -63,6 +64,6 @@ public class HumanPlayer extends Player {
     
     @Override
     public String toString() {
-        return playerName + " (Human)";
+        return playerName;
     }
 }

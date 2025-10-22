@@ -19,10 +19,7 @@ $cp = ".;gson.jar"
 
 Write-Host "Compiling source files..."
 javac -cp $cp -d bin `
-    src\com\catan\rivals\util\GameObserver.java `
-    src\com\catan\rivals\util\JsonUtils.java `
-    src\com\catan\rivals\util\CardFactory.java `
-    src\com\catan\rivals\util\PrincipalityRenderer.java `
+    src\com\catan\rivals\util\*.java `
     src\com\catan\rivals\model\*.java `
     src\com\catan\rivals\player\Player.java `
     src\com\catan\rivals\player\HumanPlayer.java `

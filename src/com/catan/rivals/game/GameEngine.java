@@ -98,7 +98,7 @@ public class GameEngine {
             Player active = players.get(currentPlayerIndex);
             Player opponent = players.get((currentPlayerIndex + 1) % 2);
             
-            broadcast("\n" + "=".repeat(60));
+            broadcast("=".repeat(60));
             broadcast("--- " + active + "'s Turn ---");
             broadcast("=".repeat(60));
             
@@ -133,7 +133,7 @@ public class GameEngine {
         int production = rolls[0];
         int event = rolls[1];
         
-        broadcast("\n[Dice Roll]");
+        broadcast("[Dice Roll]");
         broadcast("  Production Die: " + production);
         broadcast("  Event Die: " + event + " (" + Dice.getEventDescription(event) + ")");
         notifyObservers("DICE_ROLLED", rolls);
@@ -141,7 +141,7 @@ public class GameEngine {
         // Phase 2 & 3: Apply Production and Event
         // CRITICAL FIX: Official Rules state Brigand Attack happens BEFORE production
         if (event == Dice.EVENT_BRIGAND) {
-            broadcast("\n** BRIGAND ATTACK FIRST **");
+            broadcast("** BRIGAND ATTACK FIRST **");
             executePhase(new EventPhaseHandler(event, players, deck));
             executePhase(new ProductionPhaseHandler(production, players));
         } else {
@@ -150,27 +150,24 @@ public class GameEngine {
         }
         
         // Show updated board state after production/events
-        broadcast("\n[Board State After Production & Events]");
+        broadcast("[Board State After Production & Events]");
         displayGameStateToAll();
         
         // Phase 4: Action Phase
         currentPhase = GamePhase.ACTION;
-        broadcast("\n[Action Phase]");
+        broadcast("[Action Phase]");
         active.takeActions(opponent, deck);
         
         // Phase 5: Replenish Hand
         currentPhase = GamePhase.REPLENISH;
-        broadcast("\n[Replenish Phase]");
+        broadcast("[Replenish Phase]");
         replenishHandler.execute(active, opponent);
         
         // Phase 6: Exchange (optional)
         currentPhase = GamePhase.EXCHANGE;
-        broadcast("\n[Exchange Phase - Optional]");
-        if (exchangeHandler.canExchange(active)) {
-            exchangeHandler.executeExchange(active);
-        } else {
-            active.sendMessage("Cannot exchange cards (need cards and resources).");
-        }
+        broadcast("[Exchange Phase]");
+        exchangeHandler.executeExchange(active);
+        
         
         // Phase 7: Victory Check
         currentPhase = GamePhase.VICTORY_CHECK;
@@ -178,7 +175,7 @@ public class GameEngine {
             handleVictory(active, opponent);
         }
         
-        broadcast("\n--- End of Turn ---\n");
+        broadcast("--- End of Turn ---");
     }
     
     /**
@@ -214,12 +211,12 @@ public class GameEngine {
     private void handleVictory(Player winner, Player loser) {
         int finalScore = victoryCondition.calculateTotalVictoryPoints(winner, loser);
         
-        broadcast("\n" + "=".repeat(60));
+        broadcast("" + "=".repeat(60));
         broadcast("                    GAME OVER!");
         broadcast("=".repeat(60));
         broadcast("Winner: " + winner);
         broadcast("Final Score: " + finalScore + " Victory Points");
-        broadcast("\n" + victoryCondition.getVictoryPointsSummary(winner, loser));
+        broadcast("" + victoryCondition.getVictoryPointsSummary(winner, loser));
         broadcast("=".repeat(60));
         
         currentPhase = GamePhase.GAME_OVER;

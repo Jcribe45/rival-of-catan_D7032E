@@ -27,7 +27,7 @@ public class GameSetup {
             setupPlayerPrincipality(players.get(i), deck, i);
         }
         
-        // Initial card draw for each player (3 cards from stacks 1-3)
+        // Initial card draw for each player
         for (Player player : players) {
             drawInitialHand(player, deck);
         }
@@ -39,6 +39,11 @@ public class GameSetup {
         
         // Setup remaining regions with dice values
         assignRemainingRegionDice(deck);
+        
+        // Initialize effect tracking from starting boards
+        for (Player player : players) {
+            player.getEffectTracker().rebuildFromBoard(player.getPrincipality());
+        }
     }
     
     /**

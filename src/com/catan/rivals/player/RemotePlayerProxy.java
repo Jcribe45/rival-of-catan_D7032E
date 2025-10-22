@@ -41,19 +41,6 @@ public class RemotePlayerProxy extends Player {
         this.inputStream = new ObjectInputStream(socket.getInputStream());
     }
     
-    /**
-     * Sets up connection with pre-created streams.
-     * 
-     * @param socket The socket
-     * @param input Input stream
-     * @param output Output stream
-     */
-    public void setConnection(Socket socket, ObjectInputStream input, ObjectOutputStream output) {
-        this.socket = socket;
-        this.inputStream = input;
-        this.outputStream = output;
-    }
-    
     @Override
     public void sendMessage(String message) {
         if (outputStream == null) {
@@ -62,7 +49,9 @@ public class RemotePlayerProxy extends Player {
         }
         
         try {
-            outputStream.writeObject(message);
+            // Add player name prefix for consistent formatting
+            String formattedMessage = "[" + playerName + "] " + message;
+            outputStream.writeObject(formattedMessage);
             outputStream.flush();
             outputStream.reset(); // Prevent memory leak from object caching
         } catch (IOException e) {
@@ -78,6 +67,11 @@ public class RemotePlayerProxy extends Player {
         }
         
         try {
+            // Send input prompt marker
+            outputStream.writeObject("INPUT_PROMPT");
+            outputStream.flush();
+            
+            // Wait for response
             Object obj = inputStream.readObject();
             return obj == null ? "" : obj.toString();
         } catch (IOException | ClassNotFoundException e) {

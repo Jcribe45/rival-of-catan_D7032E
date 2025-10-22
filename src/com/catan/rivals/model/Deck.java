@@ -169,6 +169,76 @@ public class Deck {
         return null;
     }
     
+    /**
+     * Returns a card to the bottom of a draw stack.
+     * Used for exchanges and card cycling.
+     * 
+     * @param card The card to return
+     * @param stackNum The stack number (1-4)
+     * @return True if successfully returned
+     */
+    public boolean returnCardToStackBottom(Card card, int stackNum) {
+        List<Card> stack = getDrawStack(stackNum);
+        if (stack != null && card != null) {
+            stack.add(card); // Add to bottom (end of list)
+            return true;
+        }
+        return false;
+    }
+
+    /**
+     * Returns a card to the top of a draw stack.
+     * Used for refunds or immediate redraw.
+     * 
+     * @param card The card to return
+     * @param stackNum The stack number (1-4)
+     * @return True if successfully returned
+     */
+    public boolean returnCardToStackTop(Card card, int stackNum) {
+        List<Card> stack = getDrawStack(stackNum);
+        if (stack != null && card != null) {
+            stack.add(0, card); // Add to top (start of list)
+            return true;
+        }
+        return false;
+    }
+
+    /**
+     * Peeks at the top card of a stack without removing it.
+     * 
+     * @param stackNum The stack number (1-4)
+     * @return The top card, or null if empty
+     */
+    public Card peekStack(int stackNum) {
+        List<Card> stack = getDrawStack(stackNum);
+        if (stack != null && !stack.isEmpty()) {
+            return stack.get(0);
+        }
+        return null;
+    }
+
+    /**
+     * Checks if a stack has cards.
+     * 
+     * @param stackNum The stack number (1-4)
+     * @return True if stack has cards
+     */
+    public boolean isStackEmpty(int stackNum) {
+        List<Card> stack = getDrawStack(stackNum);
+        return stack == null || stack.isEmpty();
+    }
+
+    /**
+     * Gets the size of a draw stack.
+     * 
+     * @param stackNum The stack number (1-4)
+     * @return The stack size
+     */
+    public int getStackSize(int stackNum) {
+        List<Card> stack = getDrawStack(stackNum);
+        return stack != null ? stack.size() : 0;
+    }
+
     // Getters
     
     public List<Card> getRoads() { return roads; }

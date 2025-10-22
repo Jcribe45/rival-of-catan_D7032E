@@ -34,14 +34,24 @@ public class PrincipalityRenderer {
         
         // Separator
         appendHorizontalSeparator(sb, cols);
-        
+
         // Rows
         for (int r = 0; r < rows; r++) {
+            // First line: Row index and card names
             sb.append(String.format("%2d |", r));
             for (int c = 0; c < cols; c++) {
                 Card card = prin.getCardAt(r, c);
-                String cellContent = formatCard(card);
-                sb.append(String.format("%-20s|", cellContent));
+                String title = cellTitle(card);
+                sb.append(String.format("%-20s|", title));
+            }
+            sb.append("\n");
+
+            // Second line: Resource / dice info (or blank)
+            sb.append("   |");
+            for (int c = 0; c < cols; c++) {
+                Card card = prin.getCardAt(r, c);
+                String info = cellInfo(card);
+                sb.append(String.format("%-20s|", info));
             }
             sb.append("\n");
             
@@ -83,69 +93,51 @@ public class PrincipalityRenderer {
         return sb.toString();
     }
     
-    /**
-     * Renders just the principality grid without player stats.
-     * Useful for debugging or partial displays.
-     * 
-     * @param prin The principality to render
-     * @return Formatted grid string
-     */
-    public static String renderPrincipalityGrid(Principality prin) {
-        StringBuilder sb = new StringBuilder();
-        int rows = prin.getRowCount();
-        int cols = prin.getColumnCount();
-        
-        // Column headers
-        sb.append("           ");
-        for (int c = 0; c < cols; c++) {
-            sb.append(String.format("%-20s ", "Col " + c));
-        }
-        sb.append("\n");
-        
-        // Separator
-        appendHorizontalSeparator(sb, cols);
-        
-        // Rows
-        for (int r = 0; r < rows; r++) {
-            sb.append(String.format("%2d |", r));
-            for (int c = 0; c < cols; c++) {
-                Card card = prin.getCardAt(r, c);
-                String cellContent = formatCard(card);
-                sb.append(String.format("%-20s|", cellContent));
-            }
-            sb.append("\n");
-            
-            // Separator
-            appendHorizontalSeparator(sb, cols);
-        }
-        
-        return sb.toString();
-    }
     
     /**
-     * Formats a card for display in a grid cell.
-     * 
-     * @param card The card to format (may be null)
-     * @return Formatted string (max 12 characters)
+     * Returns the title of the given card for display, including shortcut descriptor for resource regions.
+     *
+     * @param c the card (may be null)
+     * @return the display title (empty string if card is null)
      */
-    private static String formatCard(Card card) {
-        if (card == null) {
+    private static String cellTitle(Card c) {
+        if (c == null) {
             return "";
         }
-        
-        String name = card.getName();
-        if (name.length() > 10) {
-            name = name.substring(0, 10);
+        String title = c.getName();  // using getter (good encapsulation)
+        if ("Forest".equals(title)) {
+            title += " (L):Lumber";
+        } else if ("Hill".equals(title)) {
+            title += " (B):Brick";
+        } else if ("Field".equals(title)) {
+            title += " (G):Grain";
+        } else if ("Pasture".equals(title)) {
+            title += " (W):Wool";
+        } else if ("Mountain".equals(title)) {
+            title += " (O):Ore";
+        } else if ("Gold Field".equals(title)) {
+            title += " (A):Gold";
         }
-        
-        // Add resource info for regions
-        if (card.getCardType() == CardType.REGION) {
-            int stored = card.getStoredResources();
-            int dice = card.getDiceRoll();
-            return String.format("%s (D%d:%d/3)", name, dice, stored);
+        return title == null ? "Unknown" : title;
+    }
+
+    /**
+     * Returns the info-line for the given card for display (e.g., dice roll, stored resources).
+     *
+     * @param c the card (may be null)
+     * @return the info string (empty string if card is null or non-region)
+     */
+    private static String cellInfo(Card c) {
+        if (c == null) {
+            return "";
         }
-        
-        return name;
+        if (CardType.REGION.equals(c.getCardType())) {
+            int diceRoll = c.getDiceRoll();
+            String die = (diceRoll <= 0 ? "-" : String.valueOf(diceRoll));
+            int stored = Math.max(0, Math.min(3, c.getStoredResources()));
+            return "d" + die + "  " + stored + "/3";
+        }
+        return "";
     }
     
     /**

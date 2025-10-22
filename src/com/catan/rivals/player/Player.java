@@ -2,7 +2,10 @@ package com.catan.rivals.player;
 
 import com.catan.rivals.model.*;
 import com.catan.rivals.game.GameSetup;
+import com.catan.rivals.util.EffectTracker;
 import com.catan.rivals.util.PrincipalityRenderer;
+import com.catan.rivals.util.TradingHelper;
+
 import java.util.*;
 
 /**
@@ -19,6 +22,7 @@ public abstract class Player {
     protected ResourceBank resourceBank;
     protected List<Card> hand;
     
+    
     // Points
     protected int victoryPoints;
     protected int commercePoints;
@@ -28,6 +32,7 @@ public abstract class Player {
     
     // Flags for special abilities (Marketplace, Parish Hall, etc.)
     protected Set<String> flags;
+    protected EffectTracker effectTracker;
     
     /**
      * Constructor initializes player state.
@@ -37,6 +42,7 @@ public abstract class Player {
         this.resourceBank = new ResourceBank(principality);
         this.hand = new ArrayList<>();
         this.flags = new HashSet<>();
+        this.effectTracker = new EffectTracker();
         this.victoryPoints = 0;
         this.commercePoints = 0;
         this.skillPoints = 0;
@@ -97,62 +103,66 @@ public abstract class Player {
      * Uses centralized PrincipalityRenderer.
      */
     protected void displayBoard() {
-        sendMessage("\n=== Your Principality ===");
+        sendMessage("=== Your Principality ===");
         sendMessage(PrincipalityRenderer.renderPrincipality(this));
     }
     
     /**
-     * Displays the player's hand.
+     * Displays the player's hand with detailed information.
      * Default implementation, can be overridden.
      */
     protected void displayHand() {
-        sendMessage("\n=== Your Hand (" + hand.size() + " cards) ===");
+        sendMessage("=== Your Hand (" + hand.size() + " cards) ===");
         for (int i = 0; i < hand.size(); i++) {
             Card card = hand.get(i);
             sendMessage(String.format("[%d] %s (Cost: %s, Type: %s)", 
-                i, card.getName(), card.getCostString(), card.getCardType()));
+                i, 
+                card.getName(), 
+                card.getCostString(),
+                card.getCardType().getDisplayName()));
         }
         sendMessage("");
     }
-    
+
     /**
-     * Displays player's available resources.
+     * Displays the player's resources with active effects.
      */
     protected void displayResources() {
         sendMessage("\n=== Your Resources ===");
         Map<ResourceType, Integer> resources = resourceBank.getResourceSummary();
-        for (Map.Entry<ResourceType, Integer> entry : resources.entrySet()) {
-            if (entry.getValue() > 0) {
-                sendMessage(String.format("  %s: %d", entry.getKey().getDisplayName(), entry.getValue()));
-            }
+        
+        for (ResourceType type : ResourceType.values()) {
+            int count = resources.getOrDefault(type, 0);
+            sendMessage("  " + type.getDisplayName() + ": " + count);
         }
-        sendMessage(String.format("Total: %d resources\n", resourceBank.getTotalResources()));
+        
+        sendMessage("Total: " + resourceBank.getTotalResources() + " resources");
+        
+        // Show active effects
+        String effects = effectTracker.getEffectsSummary();
+        if (!effects.isEmpty()) {
+            sendMessage(effects);
+        }
     }
-    
+
     /**
      * Prompts for and returns the player's action choice.
-     * Can be overridden for different input methods.
-     * 
-     * @return The action string
      */
     protected String promptForAction() {
         sendMessage("Choose action:");
         sendMessage("  PLAY <index> <row> <col> - Play card from hand");
         sendMessage("  BUILD <Road|Settlement|City> <row> <col> - Build center card");
-        sendMessage("  TRADE3 <give> <get> - Trade 3:1 with bank");
+        sendMessage("  TRADE <give> <get> - Trade with bank (checks for 2:1 abilities)");
         sendMessage("  VIEW - View boards again");
         sendMessage("  END - End action phase");
-        sendMessage("\nYour choice: ");
+        sendMessage("");
+        sendMessage("Your choice:");
+        
         return receiveInput();
     }
-    
+
     /**
      * Executes an action command.
-     * 
-     * @param action The action command
-     * @param opponent The opponent
-     * @param deck The game deck
-     * @return True if action phase should end
      */
     protected boolean executeAction(String action, Player opponent, Deck deck) {
         if (action == null || action.trim().isEmpty()) {
@@ -165,10 +175,6 @@ public abstract class Player {
         switch (command) {
             case "END":
                 return true;
-                
-            case "VIEW":
-                displayBothBoards(opponent);
-                return false;
                 
             case "PLAY":
                 if (parts.length >= 4) {
@@ -184,11 +190,16 @@ public abstract class Player {
                 sendMessage("Usage: BUILD <Road|Settlement|City> <row> <col>");
                 break;
                 
-            case "TRADE3":
+            case "TRADE":
                 if (parts.length >= 3) {
-                    return handleTrade3(parts);
+                    return handleTrade(parts);
                 }
-                sendMessage("Usage: TRADE3 <give> <get>");
+                sendMessage("Usage: TRADE <give> <get>");
+                break;
+                
+            case "VIEW":
+                displayBothBoards(opponent);
+                displayHand();
                 break;
                 
             default:
@@ -197,12 +208,12 @@ public abstract class Player {
         
         return false;
     }
+
     
     // ========== Action Handlers ==========
     
     /**
      * Handles playing a card from hand.
-     * FIXED: Improved validation and error messages.
      */
     protected boolean handlePlayCard(String[] parts, Player opponent) {
         try {
@@ -211,43 +222,39 @@ public abstract class Player {
             int col = Integer.parseInt(parts[3]);
             
             if (index < 0 || index >= hand.size()) {
-                sendMessage("Invalid card index (0-" + (hand.size()-1) + ")");
+                sendMessage("Invalid card index");
                 return false;
             }
             
             Card card = hand.get(index);
             
-            // Check if can afford
             if (!resourceBank.canAfford(card.getCost())) {
                 sendMessage("Cannot afford card cost: " + card.getCostString());
-                sendMessage("You need: " + card.getCostString());
                 return false;
             }
             
-            // Check if can place at that position
             if (!card.canApplyEffect(this, opponent, row, col)) {
-                sendMessage("Cannot play card at position (" + row + "," + col + ")");
-                sendMessage("Reasons might include:");
-                sendMessage("  - Position is not empty");
-                sendMessage("  - Card type cannot be placed there");
-                sendMessage("  - Prerequisites not met");
+                sendMessage("Cannot play card at that position");
                 return false;
             }
             
-            // Pay cost
             if (resourceBank.payCost(card.getCost())) {
-                // Apply effect
                 if (card.applyEffect(this, opponent, row, col)) {
                     hand.remove(index);
-                    sendMessage("✓ Successfully played " + card.getName());
-                    return false;
-                }
-                else {
-                    sendMessage("✗ Failed to apply card effect");
-                    // Refund resources (add them back)
-                    for (Map.Entry<ResourceType, Integer> entry : card.getCost().entrySet()) {
-                        resourceBank.addResources(entry.getKey(), entry.getValue());
+                    
+                    // Register card effects
+                    Principality.CardPosition pos = new Principality.CardPosition(card, row, col);
+                    effectTracker.registerCardEffects(card, pos);
+                    
+                    sendMessage("Successfully played " + card.getName());
+                    
+                    // Show if card has special abilities
+                    if (effectTracker.hasTwoForOneTrading(ResourceType.GOLD) && 
+                        card.getName().contains("Gold")) {
+                        sendMessage("  Effect: You can now trade 2 Gold for 1 other resource!");
                     }
+                    
+                    return false;
                 }
             }
             
@@ -257,6 +264,27 @@ public abstract class Player {
             sendMessage("Invalid number format");
         }
         
+        return false;
+    }
+
+    /**
+     * Handles trading with bank.
+     * Now uses TradingHelper to check for 2:1 abilities.
+     */
+    protected boolean handleTrade(String[] parts) {
+        String give = parts[1];
+        String get = parts[2];
+        
+        ResourceType giveType = ResourceType.fromString(give);
+        ResourceType getType = ResourceType.fromString(get);
+        
+        if (giveType == null || getType == null) {
+            sendMessage("Invalid resource types");
+            sendMessage("Available: Brick, Grain, Lumber, Wool, Ore, Gold");
+            return false;
+        }
+        
+        TradingHelper.executeTrade(this, giveType, getType);
         return false;
     }
     
@@ -451,6 +479,186 @@ public abstract class Player {
         }
         return null;
     }
+
+    /**
+     * Prompts player to choose a card from their hand.
+     * Reusable across phases and events.
+     * 
+     * @param prompt The prompt message
+     * @param allowCancel Whether to allow cancellation
+     * @return The card index, or -1 if cancelled
+     */
+    public int chooseCardFromHand(String prompt, boolean allowCancel) {
+        if (hand.isEmpty()) {
+            sendMessage("Your hand is empty!");
+            return -1;
+        }
+        
+        sendMessage("=== Your Hand ===");
+        for (int i = 0; i < hand.size(); i++) {
+            sendMessage(String.format("[%d] %s", i, hand.get(i).getName()));
+        }
+        
+        String cancelText = allowCancel ? " or 'C' to cancel" : "";
+        sendMessage("" + prompt + " (0-" + (hand.size() - 1) + ")" + cancelText + ":");
+        
+        String input = receiveInput();
+        
+        if (allowCancel && input.trim().toUpperCase().equals("C")) {
+            return -1;
+        }
+        
+        try {
+            int index = Integer.parseInt(input.trim());
+            if (index >= 0 && index < hand.size()) {
+                return index;
+            } else {
+                sendMessage("Invalid card index!");
+                return -1;
+            }
+        } catch (NumberFormatException e) {
+            sendMessage("Invalid input!");
+            return -1;
+        }
+    }
+
+    /**
+     * Prompts player to choose multiple cards from hand.
+     * Used for events like Religious Dispute.
+     * 
+     * @param count Number of cards to choose
+     * @param prompt The prompt message
+     * @return List of card indices, or empty list if cancelled
+     */
+    public List<Integer> chooseMultipleCardsFromHand(int count, String prompt) {
+        List<Integer> chosen = new ArrayList<>();
+        
+        if (hand.size() < count) {
+            sendMessage("Not enough cards in hand!");
+            return chosen;
+        }
+        
+        for (int i = 0; i < count; i++) {
+            sendMessage("" + prompt + " (" + (i + 1) + "/" + count + ")");
+            int index = chooseCardFromHand("Choose card", false);
+            
+            if (index < 0 || chosen.contains(index)) {
+                sendMessage("Invalid choice!");
+                return new ArrayList<>(); // Return empty on failure
+            }
+            
+            chosen.add(index);
+        }
+        
+        return chosen;
+    }
+
+    /**
+     * Prompts player to choose a draw stack.
+     * 
+     * @param deck The game deck
+     * @param prompt The prompt message
+     * @param allowCancel Whether to allow cancellation
+     * @return Stack number (1-4), or -1 if cancelled/invalid
+     */
+    public int chooseDrawStack(Deck deck, String prompt, boolean allowCancel) {
+        String cancelText = allowCancel ? " or 'C' to cancel" : "";
+        sendMessage("" + prompt + " (1-4)" + cancelText + ":");
+        
+        String input = receiveInput();
+        
+        if (allowCancel && input.trim().toUpperCase().equals("C")) {
+            return -1;
+        }
+        
+        try {
+            int stackNum = Integer.parseInt(input.trim());
+            if (stackNum >= 1 && stackNum <= 4) {
+                // Check if stack is empty
+                List<Card> stack = deck.getDrawStack(stackNum);
+                if (stack == null || stack.isEmpty()) {
+                    sendMessage("Stack " + stackNum + " is empty!");
+                    return -1;
+                }
+                return stackNum;
+            } else {
+                sendMessage("Invalid stack number!");
+                return -1;
+            }
+        } catch (NumberFormatException e) {
+            sendMessage("Invalid input!");
+            return -1;
+        }
+    }
+
+    /**
+     * Shows all cards in a stack and lets player choose one.
+     * Used for paid exchanges and special card effects.
+     * 
+     * @param stack The draw stack to choose from
+     * @param prompt The prompt message
+     * @param allowCancel Whether to allow cancellation
+     * @return The chosen card (removed from stack), or null if cancelled
+     */
+    public Card chooseCardFromStack(List<Card> stack, String prompt, boolean allowCancel) {
+        if (stack == null || stack.isEmpty()) {
+            sendMessage("Stack is empty!");
+            return null;
+        }
+        
+        sendMessage("=== Cards in Stack ===");
+        for (int i = 0; i < stack.size(); i++) {
+            sendMessage(String.format("[%d] %s - %s", 
+                i, 
+                stack.get(i).getName(),
+                stack.get(i).getCardType().getDisplayName()));
+        }
+        
+        String cancelText = allowCancel ? " or 'C' to cancel" : "";
+        sendMessage("" + prompt + " (0-" + (stack.size() - 1) + ")" + cancelText + ":");
+        
+        String input = receiveInput();
+        
+        if (allowCancel && input.trim().toUpperCase().equals("C")) {
+            return null;
+        }
+        
+        try {
+            int index = Integer.parseInt(input.trim());
+            if (index >= 0 && index < stack.size()) {
+                return stack.remove(index);
+            } else {
+                sendMessage("Invalid index!");
+                return null;
+            }
+        } catch (NumberFormatException e) {
+            sendMessage("Invalid input!");
+            return null;
+        }
+    }
+
+    /**
+     * Prompts player to choose a resource type.
+     * 
+     * @param prompt The prompt message
+     * @return The chosen ResourceType, or null if invalid
+     */
+    public ResourceType chooseResourceType(String prompt) {
+        sendMessage("" + prompt);
+        sendMessage("Options: Brick, Grain, Lumber, Wool, Ore, Gold");
+        sendMessage("Your choice:");
+        
+        String input = receiveInput();
+        ResourceType type = ResourceType.fromString(input);
+        
+        if (type == null) {
+            sendMessage("Invalid resource type!");
+        }
+        
+        return type;
+    }
+
+    
     
     // ========== Getters and Setters ==========
     
@@ -478,4 +686,6 @@ public abstract class Player {
     public int getProgressPoints() { return progressPoints; }
     public void setProgressPoints(int points) { this.progressPoints = points; }
     public void addProgressPoints(int points) { this.progressPoints += points; }
+
+    public EffectTracker getEffectTracker() { return effectTracker; }
 }
