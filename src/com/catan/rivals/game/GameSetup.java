@@ -71,7 +71,6 @@ public class GameSetup {
         
         if (settlement1 != null) {
             prin.placeCard(centerRow, 1, settlement1);
-            player.addVictoryPoints(1); // Settlement = 1 VP
         }
         
         if (road != null) {
@@ -80,7 +79,6 @@ public class GameSetup {
         
         if (settlement2 != null) {
             prin.placeCard(centerRow, 3, settlement2);
-            player.addVictoryPoints(1); // Settlement = 1 VP
         }
         
         // Place regions with asymmetric dice assignments per official rules

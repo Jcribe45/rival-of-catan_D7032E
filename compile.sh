@@ -31,9 +31,9 @@ echo "Compiling source files..."
 javac -cp "$CP" -d bin \
         src/com/catan/rivals/util/*.java \
         src/com/catan/rivals/model/*.java \
-        src/com/catan/rivals/player/Player.java \
-        src/com/catan/rivals/player/HumanPlayer.java \
-        src/com/catan/rivals/player/RemotePlayerProxy.java \
+        src/com/catan/rivals/player/*.java \
+        src/com/catan/rivals/player/action/*.java \
+        src/com/catan/rivals/player/ui/*.java \
         src/com/catan/rivals/game/*.java \
         src/com/catan/rivals/game/phase*.java \
         src/com/catan/rivals/game/event*.java \

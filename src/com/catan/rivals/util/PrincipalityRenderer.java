@@ -5,16 +5,12 @@ import com.catan.rivals.player.Player;
 
 /**
  * Handles rendering of Principality boards for display.
- * 
- * Design Pattern: Strategy Pattern (can be extended for different formats)
- * SOLID: Single Responsibility - only handles board rendering
- * SOLID: Open-Closed - can extend for new formats without modifying
- * Separation of Concerns: View logic separated from Model (Principality)
  */
 public class PrincipalityRenderer {
     
     /**
      * Renders a principality as an ASCII grid with player stats.
+     * Only renders valid rows (1, 2, 3).
      * 
      * @param player The player whose principality to render
      * @return Formatted string representation
@@ -22,7 +18,6 @@ public class PrincipalityRenderer {
     public static String renderPrincipality(Player player) {
         StringBuilder sb = new StringBuilder();
         Principality prin = player.getPrincipality();
-        int rows = prin.getRowCount();
         int cols = prin.getColumnCount();
         
         // Column headers
@@ -35,8 +30,8 @@ public class PrincipalityRenderer {
         // Separator
         appendHorizontalSeparator(sb, cols);
 
-        // Rows
-        for (int r = 0; r < rows; r++) {
+        // Only render valid rows (1, 2, 3)
+        for (int r = prin.getMinValidRow(); r <= prin.getMaxValidRow(); r++) {
             // First line: Row index and card names
             sb.append(String.format("%2d |", r));
             for (int c = 0; c < cols; c++) {
@@ -104,7 +99,7 @@ public class PrincipalityRenderer {
         if (c == null) {
             return "";
         }
-        String title = c.getName();  // using getter (good encapsulation)
+        String title = c.getName();
         if ("Forest".equals(title)) {
             title += " (L):Lumber";
         } else if ("Hill".equals(title)) {
