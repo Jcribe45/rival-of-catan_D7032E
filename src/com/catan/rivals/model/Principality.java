@@ -351,6 +351,22 @@ public class Principality {
     public int getMaxValidRow() {
         return MAX_VALID_ROW;
     }
+
+    /**
+     * Gets the initial number of columns.
+     * @return Initial columns
+     */
+    public int getInitialCols() {
+        return INITIAL_COLS;
+    }
+
+    /**
+     * Gets the initial number of rows.
+     * @return Initial rows
+     */
+    public int getInitialRows() {
+        return INITIAL_ROWS;
+    }
     
     /**
      * Helper class to represent a card with its position.

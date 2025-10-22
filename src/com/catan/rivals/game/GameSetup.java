@@ -5,6 +5,8 @@ import com.catan.rivals.player.Player;
 import java.util.List;
 import java.util.Map;
 import java.util.EnumMap;
+import java.util.Random;
+import java.util.ArrayList;
 
 /**
  * Handles initial game setup for players.
@@ -26,20 +28,18 @@ public class GameSetup {
         for (int i = 0; i < players.size(); i++) {
             setupPlayerPrincipality(players.get(i), deck, i);
         }
-        
+
         // Initial card draw for each player
-        for (Player player : players) {
-            drawInitialHand(player, deck);
-        }
-        
-        // Shuffle all decks
+        // Shuffle draw stacks and deal random starting hands
         deck.shuffleDrawStacks();
+        dealStartingHands(players, deck);
+        // Shuffle event and region decks
         deck.shuffleEvents();
         deck.shuffleRegions();
-        
+
         // Setup remaining regions with dice values
         assignRemainingRegionDice(deck);
-        
+
         // Initialize effect tracking from starting boards
         for (Player player : players) {
             player.getEffectTracker().rebuildFromBoard(player.getPrincipality());
@@ -164,7 +164,7 @@ public class GameSetup {
      * @param diceValue The production die value (1-6)
      * @param initialResources Initial stored resources
      */
-    private static void placeRegion(Player player, Deck deck, String regionName, 
+    private static void placeRegion(Player player, Deck deck, String regionName,
                                     int row, int col, int diceValue, int initialResources) {
         Card region = deck.removeCardByName(deck.getRegions(), regionName);
         
@@ -176,18 +176,43 @@ public class GameSetup {
         }
     }
     
+    // Starting hand configuration
+    private static final int START_HAND_SIZE = 3;
+    private static final Random RANDOM = new Random();
+
     /**
-     * Draws initial hand for a player (3 cards from stacks 1-3).
-     * Official Rules: Each player draws 1 card from stack 1, 1 from stack 2, 1 from stack 3.
-     * 
-     * @param player The player
-     * @param deck The deck
+     * Deals random starting hands to each player.
+     * Cards are chosen randomly from draw stacks with replacement allowed (duplicates possible).
      */
-    private static void drawInitialHand(Player player, Deck deck) {
-        for (int stackNum = 1; stackNum <= 3; stackNum++) {
-            Card card = deck.drawFromStack(stackNum);
-            if (card != null) {
-                player.addCardToHand(card);
+    private static void dealStartingHands(List<Player> players, Deck deck) {
+        // Determine non-empty draw stacks
+        List<Integer> availableStacks = new ArrayList<>();
+        for (int s = 1; s <= 4; s++) {
+            if (!deck.isStackEmpty(s)) {
+                availableStacks.add(s);
+            }
+        }
+        // Deal cards to each player
+        for (Player player : players) {
+            for (int i = 0; i < START_HAND_SIZE; i++) {
+                if (availableStacks.isEmpty()) {
+                    break;
+                }
+                int randomIndex = RANDOM.nextInt(availableStacks.size());
+                int stackNum = availableStacks.get(randomIndex);
+                List<Card> stack = deck.getDrawStack(stackNum);
+                if (stack == null || stack.isEmpty()) {
+                    // Remove empty stack and try again for this card
+                    availableStacks.remove(randomIndex);
+                    i--;
+                    continue;
+                }
+                // Pick a random card from the stack
+                int cardIndex = RANDOM.nextInt(stack.size());
+                Card card = stack.get(cardIndex);
+                if (card != null) {
+                    player.addCardToHand(card);
+                }
             }
         }
     }
@@ -221,8 +246,7 @@ public class GameSetup {
      * @param dice1 First die value
      * @param dice2 Second die value
      */
-    private static void assignDiceToRegionType(List<Card> regions, String regionName, 
-                                               int dice1, int dice2) {
+    private static void assignDiceToRegionType(List<Card> regions, String regionName, int dice1, int dice2) {
         int assigned = 0;
         
         for (Card region : regions) {

@@ -12,7 +12,9 @@ public class TradeAction implements PlayerAction {
     
     @Override
     public boolean execute(Player player, Player opponent, Deck deck) {
-        return TradingHelper.promptAndExecuteTrade(player);
+        // Execute the trade (may succeed or fail)
+        TradingHelper.promptAndExecuteTrade(player);
+        return false;
     }
     
     @Override

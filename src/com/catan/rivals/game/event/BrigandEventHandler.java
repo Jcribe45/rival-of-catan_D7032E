@@ -27,12 +27,10 @@ public class BrigandEventHandler implements GameEventHandler {
     @Override
     public void handleEvent(Player activePlayer, Player opponent) {
         for (Player player : allPlayers) {
-            int goldWool = countGoldAndWool(player);
-            
-            if (goldWool > 7) {
-                // Remove all Gold and Wool
+            int totalResources = player.getResourceBank().getTotalResources();
+            if (totalResources > 7) {
                 removeGoldAndWool(player);
-                player.sendMessage("Brigands stole your Gold and Wool!");
+                player.sendMessage("Brigand Attack! You had more than 7 resources, so all your Gold and Wool have been removed.");
             }
         }
     }
@@ -40,19 +38,6 @@ public class BrigandEventHandler implements GameEventHandler {
     @Override
     public String getEventName() {
         return "Brigand Attack";
-    }
-    
-    /**
-     * Counts Gold and Wool resources for a player.
-     * 
-     * @param player The player
-     * @return Total count
-     */
-    private int countGoldAndWool(Player player) {
-        int count = 0;
-        count += player.getResourceBank().getResourceCount(ResourceType.GOLD);
-        count += player.getResourceBank().getResourceCount(ResourceType.WOOL);
-        return count;
     }
     
     /**

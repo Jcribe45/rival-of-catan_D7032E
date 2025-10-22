@@ -17,23 +17,23 @@ import java.util.*;
 public abstract class Player {
     
     // State
-    protected Principality principality;
-    protected ResourceBank resourceBank;
-    protected List<Card> hand;
-    protected EffectTracker effectTracker;
+    private Principality principality;
+    private ResourceBank resourceBank;
+    private List<Card> hand;
+    private EffectTracker effectTracker;
     
     // Points
-    protected int victoryPoints;
-    protected int commercePoints;
-    protected int skillPoints;
-    protected int strengthPoints;
-    protected int progressPoints;
+    private int victoryPoints;
+    private int commercePoints;
+    private int skillPoints;
+    private int strengthPoints;
+    private int progressPoints;
     
     // Flags
-    protected Set<String> flags;
+    private Set<String> flags;
     
     // UI helper
-    protected PlayerUI ui;
+    private PlayerUI ui;
     
     /**
      * Constructor.
@@ -120,7 +120,7 @@ public abstract class Player {
             return -1;
         }
         
-        sendMessage("\n=== Your Hand ===");
+        sendMessage("=== Your Hand ===");
         for (int i = 0; i < hand.size(); i++) {
             sendMessage(String.format("[%d] %s", i, hand.get(i).getName()));
         }
@@ -186,10 +186,11 @@ public abstract class Player {
             return null;
         }
         
-        sendMessage("\n=== Cards in Stack ===");
+        sendMessage("=== Cards in Stack ===");
         for (int i = 0; i < stack.size(); i++) {
             sendMessage(String.format("[%d] %s - %s",
-                i, stack.get(i).getName(), stack.get(i).getCardType().getDisplayName()));
+                i, stack.get(i).getName(), 
+                stack.get(i).getCardType().getDisplayName()));
         }
         
         String cancelText = allowCancel ? " or 'C' to cancel" : "";

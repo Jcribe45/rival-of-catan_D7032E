@@ -5,8 +5,6 @@ import com.catan.rivals.player.Player;
 
 /**
  * Handles the replenish phase where players draw cards to reach hand limit.
- * 
- * REFACTORED: Uses Player.chooseDrawStack() for consistency.
  */
 public class ReplenishPhaseHandler implements PhaseHandler {
     

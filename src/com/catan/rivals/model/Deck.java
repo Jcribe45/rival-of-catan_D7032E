@@ -4,9 +4,6 @@ import java.util.*;
 
 /**
  * Represents a deck of cards with draw stacks.
- * 
- * SOLID: Single Responsibility - manages card collection and drawing
- * Booch: High cohesion - all deck operations in one place
  */
 public class Deck {
     
@@ -64,7 +61,7 @@ public class Deck {
         // Draw stacks (all other cards)
         else {
             // Distribute to draw stacks (will be shuffled later)
-            int total = drawStack1.size() + drawStack2.size() + 
+            int total = drawStack1.size() + drawStack2.size() +
                        drawStack3.size() + drawStack4.size();
             int stackNum = total % 4;
             
